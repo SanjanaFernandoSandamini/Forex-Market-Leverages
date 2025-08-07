@@ -9,7 +9,7 @@ env:
   # Docker Configuration
   DOCKER_REGISTRY: docker.io
   IMAGE_NAME: forex-leverages-app
-  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA
+  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA # Full commit SHA
   
   # App Configuration
   CONTAINER_NAME: forex-app
