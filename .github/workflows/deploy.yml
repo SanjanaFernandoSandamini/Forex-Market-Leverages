@@ -9,7 +9,7 @@ env:
   # Docker Configuration
   DOCKER_REGISTRY: docker.io
   IMAGE_NAME: forex-leverages-app
-  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA # Full commit SHA
+  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA
   
   # App Configuration
   CONTAINER_NAME: forex-app
@@ -71,10 +71,10 @@ jobs:
         ssh -o StrictHostKeyChecking=no \
             -o ConnectTimeout=10 \
             ${{ env.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-        docker pull ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
-        docker stop ${{ env.CONTAINER_NAME }} || true
-        docker rm ${{ env.CONTAINER_NAME }} || true
-        docker run -d \
+        sudo docker pull ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        sudo docker stop ${{ env.CONTAINER_NAME }} || true
+        sudo docker rm ${{ env.CONTAINER_NAME }} || true
+        sudo docker run -d \
           --name ${{ env.CONTAINER_NAME }} \
           -p ${{ env.APP_PORT }}:${{ env.APP_PORT }} \
           -e FASTFOREX_API_KEY=${{ secrets.FASTFOREX_API_KEY }} \
@@ -93,3 +93,4 @@ jobs:
         done
         echo "Deployment verification failed after ${{ env.MAX_RETRIES }} attempts"
         exit 1
+
