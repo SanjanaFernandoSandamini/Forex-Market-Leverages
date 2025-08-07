@@ -1,45 +1,98 @@
-name: Build and Deploy Forex Pipeline
+name: Forex Pipeline Deployment
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:  # Allows manual triggering
 
 env:
-  DOCKER_IMAGE_NAME: forex-pipeline
+  # Docker Configuration
+  DOCKER_REGISTRY: docker.io
+  IMAGE_NAME: forex-leverages-app  # Lowercase only, no special chars
+  IMAGE_TAG: ${{ github.sha[:7] }}  # Short commit hash (first 7 chars)
+  
+  # App Configuration
+  CONTAINER_NAME: forex-app
+  APP_PORT: 5000  # Must match Flask's port
+  MAX_RETRIES: 3  # For health checks
+  RETRY_DELAY: 10  # Seconds between retries
+  
+  # Server Configuration
+  SSH_USER: ubuntu  # Default for most cloud providers
+  DEPLOY_TIMEOUT: 300  # 5 minutes timeout for deployment
 
 jobs:
-  build-and-deploy:
+  build-and-push:
     runs-on: ubuntu-latest
-    
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
-        
-    - name: Build and push Docker image
+
+    - name: Build and push
       uses: docker/build-push-action@v5
       with:
         context: .
-        push: true
-        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
-        
-    - name: Deploy to server
-      env:
-        SSH_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        SERVER_IP: ${{ secrets.SERVER_IP }}
+        push: ${{ github.ref == 'refs/heads/main' }}
+        tags: |
+          ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Install SSH key
       run: |
-        echo "$SSH_KEY" > key.pem
-        chmod 600 key.pem
-        ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$SERVER_IP \
-          "docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest && \
-           docker stop forex-app || true && \
-           docker rm forex-app || true && \
-           docker run -d --name forex-app -p 5000:5000 \
-           -e FASTFOREX_API_KEY=${{ secrets.FASTFOREX_API_KEY }} \
-           --restart always \
-           ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest"
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    - name: Deploy to Production
+      run: |
+        ssh -o StrictHostKeyChecking=no \
+            -o ConnectTimeout=10 \
+            ${{ env.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
+        # Container management
+        docker pull ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        docker stop ${{ env.CONTAINER_NAME }} || true
+        docker rm ${{ env.CONTAINER_NAME }} || true
+        
+        # Run new container
+        docker run -d \
+          --name ${{ env.CONTAINER_NAME }} \
+          -p ${{ env.APP_PORT }}:${{ env.APP_PORT }} \
+          -e FASTFOREX_API_KEY=${{ secrets.FASTFOREX_API_KEY }} \
+          --restart unless-stopped \
+          ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+        EOF
+
+    - name: Verify Deployment
+      run: |
+        for i in $(seq 1 ${{ env.MAX_RETRIES }}); do
+          if curl -sSf http://${{ secrets.SERVER_IP }}:${{ env.APP_PORT }}/health; then
+            echo "Deployment verified successfully"
+            exit 0
+          fi
+          sleep ${{ env.RETRY_DELAY }}
+        done
+        echo "Deployment verification failed after ${{ env.MAX_RETRIES }} attempts"
+        exit 1
