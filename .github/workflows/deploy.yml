@@ -1,8 +1,11 @@
-name: Build and Deploy
+name: Build and Deploy Forex Pipeline
 
 on:
   push:
     branches: [ main ]
+
+env:
+  DOCKER_IMAGE_NAME: forex-pipeline
 
 jobs:
   build-and-deploy:
@@ -15,15 +18,15 @@ jobs:
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        username: ${{ sanjanasandaminifernando }}
-        password: ${{ dckr_pat_ef32XYu57QmwSH6wqHI2ef_0GEA }}
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
         
-    - name: Build and push
+    - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ${{ sanjanasandaminifernando }}/forex-pipeline:latest
+        tags: ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest
         
     - name: Deploy to server
       env:
@@ -33,7 +36,10 @@ jobs:
         echo "$SSH_KEY" > key.pem
         chmod 600 key.pem
         ssh -i key.pem -o StrictHostKeyChecking=no ubuntu@$SERVER_IP \
-          "docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/forex-pipeline:latest && \
+          "docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest && \
            docker stop forex-app || true && \
            docker rm forex-app || true && \
-           docker run -d --name forex-app -p 5000:5000 --restart always ${{ secrets.DOCKER_HUB_USERNAME }}/forex-pipeline:latest"
+           docker run -d --name forex-app -p 5000:5000 \
+           -e FASTFOREX_API_KEY=${{ secrets.FASTFOREX_API_KEY }} \
+           --restart always \
+           ${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.DOCKER_IMAGE_NAME }}:latest"
