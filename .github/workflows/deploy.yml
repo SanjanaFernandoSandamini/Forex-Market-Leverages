@@ -8,18 +8,18 @@ on:
 env:
   # Docker Configuration
   DOCKER_REGISTRY: docker.io
-  IMAGE_NAME: forex-leverages-app  # Lowercase only, no special chars
-  IMAGE_TAG: ${{ github.sha[:7] }}  # Short commit hash (first 7 chars)
+  IMAGE_NAME: forex-leverages-app
+  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA
   
   # App Configuration
   CONTAINER_NAME: forex-app
-  APP_PORT: 5000  # Must match Flask's port
-  MAX_RETRIES: 3  # For health checks
-  RETRY_DELAY: 10  # Seconds between retries
+  APP_PORT: 5000
+  MAX_RETRIES: 3
+  RETRY_DELAY: 10
   
   # Server Configuration
-  SSH_USER: ubuntu  # Default for most cloud providers
-  DEPLOY_TIMEOUT: 300  # 5 minutes timeout for deployment
+  SSH_USER: ubuntu
+  DEPLOY_TIMEOUT: 300
 
 jobs:
   build-and-push:
@@ -71,12 +71,9 @@ jobs:
         ssh -o StrictHostKeyChecking=no \
             -o ConnectTimeout=10 \
             ${{ env.SSH_USER }}@${{ secrets.SERVER_IP }} << 'EOF'
-        # Container management
         docker pull ${{ env.DOCKER_REGISTRY }}/${{ secrets.DOCKER_HUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
         docker stop ${{ env.CONTAINER_NAME }} || true
         docker rm ${{ env.CONTAINER_NAME }} || true
-        
-        # Run new container
         docker run -d \
           --name ${{ env.CONTAINER_NAME }} \
           -p ${{ env.APP_PORT }}:${{ env.APP_PORT }} \
