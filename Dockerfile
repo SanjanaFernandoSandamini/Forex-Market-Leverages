@@ -1,18 +1,34 @@
-FROM python:3.10-slim
+# =====================
+# Stage 1: Build Image
+# =====================
+FROM python:3.11-slim
 
+# Set working directory
 WORKDIR /app
 
-# Copy requirements first to leverage Docker cache
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency list
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
-COPY . .
+# Copy application code
+COPY forex_pipeline.py .
 
-# Explicitly set PYTHONPATH
-ENV PYTHONPATH=/app
+# Create models directory for saved models
+RUN mkdir -p models
 
+# Expose API port
 EXPOSE 8000
 
-# Make sure forex_pipeline.py contains a variable 'app = Flask(__name__)'
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "forex_pipeline:app"]
+# Environment variables
+ENV FASTFOREX_API_KEY=your_api_key_here
+
+# Run the app with Gunicorn
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "forex_pipeline:app"]
+
