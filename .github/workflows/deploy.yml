@@ -8,13 +8,13 @@ on:
 env:
   # Docker Configuration
   DOCKER_REGISTRY: docker.io
-  IMAGE_NAME: forex-leverages-app
-  IMAGE_TAG: ${{ github.sha }}  # Full commit SHA
+  IMAGE_NAME: forex-pipeline
+  IMAGE_TAG: ${{ github.sha }}  # Commit SHA as tag
   
   # App Configuration
   CONTAINER_NAME: forex-app
   APP_PORT: 8000
-  MAX_RETRIES: 3
+  MAX_RETRIES: 5
   RETRY_DELAY: 10
   
   # Server Configuration
@@ -42,7 +42,7 @@ jobs:
         username: ${{ secrets.DOCKER_HUB_USERNAME }}
         password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-    - name: Build and push
+    - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
         context: .
@@ -66,7 +66,7 @@ jobs:
         echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
         chmod 600 ~/.ssh/id_rsa
 
-    - name: Deploy to Production
+    - name: Deploy to EC2
       run: |
         ssh -o StrictHostKeyChecking=no \
             -o ConnectTimeout=10 \
@@ -86,11 +86,10 @@ jobs:
       run: |
         for i in $(seq 1 ${{ env.MAX_RETRIES }}); do
           if curl -sSf http://${{ secrets.SERVER_IP }}:${{ env.APP_PORT }}/health; then
-            echo "Deployment verified successfully"
+            echo "✅ Deployment successful!"
             exit 0
           fi
           sleep ${{ env.RETRY_DELAY }}
         done
-        echo "Deployment verification failed after ${{ env.MAX_RETRIES }} attempts"
+        echo "❌ Deployment failed after ${{ env.MAX_RETRIES }} attempts"
         exit 1
-
