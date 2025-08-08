@@ -1,20 +1,16 @@
-# Use official Python runtime as a parent image
 FROM python:3.10-slim
 
-# Set working directory inside the container
 WORKDIR /app
 
-# Copy requirements if you have one or install dependencies directly
 COPY requirements.txt .
-
-# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of your app code
 COPY . .
 
-# Expose port 5000 for Flask
+# Pre-train models during build if needed
+# RUN python -c "from forex_pipeline import train_models; train_models()"
+
 EXPOSE 8000
 
-# Run the app
-CMD ["python", "forex_pipeline.py"]
+# Use gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "forex_pipeline:app"]
