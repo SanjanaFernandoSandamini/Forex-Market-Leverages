@@ -1,0 +1,11 @@
+version: "3.9"
+
+services:
+  forex-app:
+    image: 331355389718.dkr.ecr.eu-north-1.amazonaws.com/my-app:latest
+    container_name: forex-app
+    ports:
+      - "5000:5000"
+    environment:
+      FASTFOREX_API_KEY: ${FASTFOREX_API_KEY}
+    restart: always
